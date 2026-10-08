@@ -7,6 +7,11 @@
 <meta name="description" content="Track competitor pricing across 9 retail sources. 30-day price history, alerts, and savings for 15 products.">
 <meta property="og:title" content="Shelfwatch - Price Tracking Dashboard">
 <meta property="og:description" content="Competitive price tracking for e-commerce teams. Daily price updates across 9 retailers.">
+<meta property="og:image" content="https://nordstack9.github.io/price-monitor-demo/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Shelfwatch - Price Tracking Dashboard">
+<meta name="twitter:description" content="Competitive price tracking for e-commerce teams. Daily price updates across 9 retailers.">
+<meta name="twitter:image" content="https://nordstack9.github.io/price-monitor-demo/og.png">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -281,7 +286,7 @@ tr:hover td { background: rgba(255,255,255,.015); }
     </div>
     <div class="sync-info">
       <div class="pulse"></div>
-      <span>Last sync: Oct 7, 2026, 03:00 UTC</span>
+      <span id="lastSync"></span>
     </div>
   </header>
 
@@ -434,7 +439,8 @@ const rng = mulberry32(42);
 
 function generatePriceData() {
   const data = [];
-  const endDate = new Date(2026, 8, 28);
+  const endDate = new Date();
+  endDate.setDate(endDate.getDate() - 1);
   for (const product of PRODUCTS) {
     for (const store of product.stores) {
       const base = BASE_PRICES[product.name][store];
@@ -640,6 +646,29 @@ document.querySelectorAll('.tab').forEach(tab => {
     tab.classList.add('active');
     document.getElementById(tab.dataset.tab).classList.add('active');
   });
+});
+
+// Dynamic sync timestamp
+const syncDate = new Date();
+syncDate.setHours(3, 0, 0, 0);
+document.getElementById('lastSync').textContent =
+  'Last sync: ' + syncDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ', 03:00 UTC';
+
+// CSV export
+document.querySelector('.foot a').addEventListener('click', function(e) {
+  e.preventDefault();
+  const rows = [['Product','Category','Store','Date','Price']];
+  for (const row of PRICE_DATA) {
+    rows.push([row.product, row.category, row.store, row.date, row.price.toFixed(2)]);
+  }
+  const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'shelfwatch-export.csv';
+  a.click();
+  URL.revokeObjectURL(url);
 });
 
 // Toast
