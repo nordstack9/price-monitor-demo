@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shelfwatch - Price Tracking Dashboard</title>
+<meta name="description" content="Track competitor pricing across 9 retail sources. 30-day price history, alerts, and savings for 15 products.">
+<meta property="og:title" content="Shelfwatch - Price Tracking Dashboard">
+<meta property="og:description" content="Competitive price tracking for e-commerce teams. Daily price updates across 9 retailers.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0c1222;
+  --surface: #141e33;
+  --raised: #1c2841;
+  --border: #253352;
+  --text: #cbd5e1;
+  --bright: #f1f5f9;
+  --muted: #64748b;
+  --dim: #475569;
+  --accent: #818cf8;
+  --accent-dim: rgba(129,140,248,.12);
+  --drop: #34d399;
+  --drop-dim: rgba(52,211,153,.1);
+  --up: #f87171;
+  --up-dim: rgba(248,113,113,.1);
+  --warn: #fbbf24;
+  --r: 8px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+.wrap { max-width: 1120px; margin: 0 auto; padding: 24px 16px 48px; }
+
+/* Header */
+header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+.logo { display: flex; align-items: center; gap: 9px; }
+.logo-mark {
+  width: 28px; height: 28px; border-radius: 7px;
+  background: linear-gradient(135deg, #818cf8, #6366f1);
+  display: flex; align-items: center; justify-content: center;
+}
+.logo-mark svg { width: 14px; height: 14px; }
+.logo h1 { font-size: 17px; font-weight: 700; color: var(--bright); letter-spacing: -0.03em; }
+.sync-info { display: flex; align-items: center; gap: 8px; }
+.pulse {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--drop);
+  box-shadow: 0 0 6px var(--drop);
+  animation: glow 2.5s ease-in-out infinite;
+}
+@keyframes glow { 0%,100%{ opacity:.5; } 50%{ opacity:1; } }
+.sync-info span { font-size: 11px; color: var(--muted); font-weight: 500; font-family: 'JetBrains Mono', monospace; }
+
+/* Tabs */
+.tabs { display: flex; gap: 2px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+.tab {
+  padding: 8px 16px; font-size: 13px; font-weight: 500; color: var(--muted);
+  cursor: pointer; border: none; background: none;
+  border-bottom: 2px solid transparent; transition: color .15s, border-color .15s;
+  font-family: inherit;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* KPI strip */
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+.kpi {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
+  padding: 14px 16px; position: relative; overflow: hidden;
+}
+.kpi::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--border);
+}
+.kpi:last-child::before { background: var(--drop); }
+.kpi-label {
+  font-size: 10px; letter-spacing: .06em; color: var(--muted); font-weight: 600;
+  text-transform: uppercase; margin-bottom: 4px;
+}
+.kpi-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 22px; font-weight: 700; color: var(--bright);
+}
+.kpi-value.green { color: var(--drop); }
+
+/* Card */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); margin-bottom: 16px; overflow: hidden;
+}
+.card-header {
+  padding: 12px 18px; border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.card-header h2 { font-size: 13px; font-weight: 600; color: var(--bright); }
+.pill {
+  font-size: 10px; color: var(--muted); font-weight: 500;
+  background: var(--raised); padding: 4px 10px; border-radius: 20px;
+  border: 1px solid var(--border);
+}
+
+/* Chart */
+.chart-box { padding: 14px 18px 10px; height: 340px; position: relative; }
+
+/* Table */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table { width: 100%; border-collapse: collapse; min-width: 700px; }
+th {
+  text-align: left; padding: 8px 14px;
+  font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--dim); font-weight: 600; background: var(--raised);
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+th:last-child { text-align: right; }
+td {
+  padding: 8px 14px; border-bottom: 1px solid rgba(37,51,82,.5);
+  font-size: 12.5px; white-space: nowrap; color: var(--text);
+}
+tr:hover td { background: rgba(255,255,255,.015); }
+.pname { font-weight: 600; color: var(--bright); }
+.cat-pill {
+  display: inline-block; padding: 2px 7px; border-radius: 4px;
+  font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em;
+}
+.cat-Laptops { background: rgba(129,140,248,.15); color: #a5b4fc; }
+.cat-Audio { background: rgba(244,63,94,.12); color: #fb7185; }
+.cat-Tablets { background: rgba(6,182,212,.12); color: #22d3ee; }
+.cat-TVs { background: rgba(251,191,36,.12); color: #fbbf24; }
+.cat-Home { background: rgba(52,211,153,.12); color: #6ee7b7; }
+.cat-Gaming { background: rgba(168,85,247,.12); color: #c084fc; }
+.mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 500; }
+.price { color: var(--bright); }
+.store { color: var(--muted); font-size: 12px; }
+.avg { color: var(--dim); }
+.range { color: var(--dim); font-size: 11px; }
+.save { text-align: right; color: var(--drop); font-weight: 600; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+
+/* Products tab */
+.filter-bar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+.search-box {
+  flex: 1; min-width: 200px; padding: 8px 12px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
+  color: var(--bright); font-size: 13px; font-family: inherit;
+  outline: none; transition: border-color .15s;
+}
+.search-box::placeholder { color: var(--dim); }
+.search-box:focus { border-color: var(--accent); }
+.cat-filters { display: flex; gap: 4px; flex-wrap: wrap; }
+.cat-btn {
+  padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 500;
+  border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+  cursor: pointer; transition: all .15s; font-family: inherit;
+}
+.cat-btn:hover { border-color: var(--accent); color: var(--text); }
+.cat-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+
+/* Product cards */
+.product-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+}
+.product-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 16px; transition: border-color .15s;
+}
+.product-card:hover { border-color: var(--accent); }
+.pc-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+.pc-name { font-size: 13px; font-weight: 600; color: var(--bright); line-height: 1.3; }
+.pc-mid { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 10px; }
+.pc-price { font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 700; color: var(--bright); }
+.pc-store { font-size: 11px; color: var(--muted); }
+.pc-spark { display: flex; align-items: flex-end; gap: 1px; height: 28px; }
+.pc-spark span { width: 3px; border-radius: 1px; background: var(--accent); opacity: .5; transition: opacity .1s; }
+.pc-spark:hover span { opacity: .8; }
+.pc-bottom { display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid var(--border); }
+.pc-saving { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; color: var(--drop); }
+.pc-range { font-size: 10px; color: var(--dim); }
+
+/* Settings tab */
+.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.setting-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 20px;
+}
+.setting-card h3 { font-size: 14px; font-weight: 600; color: var(--bright); margin-bottom: 14px; }
+.setting-row { margin-bottom: 14px; }
+.setting-row:last-child { margin-bottom: 0; }
+.setting-label { display: block; font-size: 12px; color: var(--text); margin-bottom: 5px; font-weight: 500; }
+.setting-input, .setting-select {
+  width: 100%; padding: 8px 12px; background: var(--raised);
+  border: 1px solid var(--border); border-radius: 6px; color: var(--bright);
+  font-size: 13px; font-family: inherit; outline: none;
+}
+.setting-input:focus, .setting-select:focus { border-color: var(--accent); }
+.setting-select { appearance: none; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2364748b' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center;
+  padding-right: 30px;
+}
+.check-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; cursor: pointer; }
+.check-row input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
+.check-row span { font-size: 13px; color: var(--text); }
+.toggle-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; }
+.toggle-row span { font-size: 13px; color: var(--text); }
+.toggle {
+  position: relative; width: 36px; height: 20px; background: var(--dim);
+  border-radius: 10px; cursor: pointer; transition: background .2s; border: none;
+}
+.toggle.on { background: var(--accent); }
+.toggle::after {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 16px; height: 16px; border-radius: 50%; background: #fff;
+  transition: transform .2s;
+}
+.toggle.on::after { transform: translateX(16px); }
+.save-btn {
+  margin-top: 16px; padding: 10px 24px; background: var(--accent);
+  border: none; border-radius: 6px; color: #fff; font-size: 13px;
+  font-weight: 600; cursor: pointer; font-family: inherit; transition: opacity .15s;
+}
+.save-btn:hover { opacity: .85; }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(60px);
+  background: var(--raised); border: 1px solid var(--accent);
+  color: var(--bright); padding: 10px 20px; border-radius: 8px;
+  font-size: 13px; font-weight: 500; opacity: 0; transition: all .3s;
+  z-index: 100; pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* Footer */
+.foot {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border);
+  flex-wrap: wrap; gap: 8px;
+}
+.foot a {
+  color: var(--accent); font-size: 12px; text-decoration: none; font-weight: 500;
+  display: flex; align-items: center; gap: 5px;
+}
+.foot a:hover { text-decoration: underline; }
+.foot a svg { width: 13px; height: 13px; }
+.foot .note { font-size: 10px; color: var(--dim); font-family: 'JetBrains Mono', monospace; }
+
+/* Responsive */
+@media (max-width: 900px) {
+  .product-grid { grid-template-columns: repeat(2, 1fr); }
+  .settings-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .kpis { grid-template-columns: repeat(2, 1fr); }
+  .product-grid { grid-template-columns: 1fr; }
+  .tab { padding: 8px 10px; font-size: 12px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="logo">
+      <div class="logo-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round">
+          <rect x="3" y="12" width="4" height="9" rx="1"/><rect x="10" y="7" width="4" height="14" rx="1"/><rect x="17" y="3" width="4" height="18" rx="1"/>
+        </svg>
+      </div>
+      <h1>shelfwatch</h1>
+    </div>
+    <div class="sync-info">
+      <div class="pulse"></div>
+      <span>Last sync: Oct 7, 2026, 03:00 UTC</span>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="overview">Overview</button>
+    <button class="tab" data-tab="products">Products</button>
+    <button class="tab" data-tab="settings">Settings</button>
+  </div>
+
+  <!-- OVERVIEW -->
+  <div id="overview" class="tab-panel active">
+    <div class="kpis">
+      <div class="kpi"><div class="kpi-label">Products tracked</div><div class="kpi-value">15</div></div>
+      <div class="kpi"><div class="kpi-label">Retail sources</div><div class="kpi-value">9</div></div>
+      <div class="kpi"><div class="kpi-label">Price points (30d)</div><div class="kpi-value">1,800</div></div>
+      <div class="kpi"><div class="kpi-label">Best saving found</div><div class="kpi-value green" id="bestSaving"></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2>30-Day Price Trends</h2>
+        <span class="pill">Best price per day, all sources</span>
+      </div>
+      <div class="chart-box"><canvas id="priceChart"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2>Price Comparison</h2>
+        <span class="pill">Ranked by savings potential</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Product</th><th>Category</th><th>Best price</th><th>Source</th><th>30d avg</th><th>30d range</th><th style="text-align:right">Savings</th></tr></thead>
+          <tbody id="summaryTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRODUCTS -->
+  <div id="products" class="tab-panel">
+    <div class="filter-bar">
+      <input type="text" class="search-box" id="productSearch" placeholder="Search products...">
+      <div class="cat-filters" id="catFilters"></div>
+    </div>
+    <div class="product-grid" id="productGrid"></div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div id="settings" class="tab-panel">
+    <div class="settings-grid">
+      <div class="setting-card">
+        <h3>Tracking</h3>
+        <div class="setting-row">
+          <label class="setting-label">Sync frequency</label>
+          <select class="setting-select">
+            <option>Hourly</option>
+            <option>Every 6 hours</option>
+            <option selected>Daily</option>
+            <option>Weekly</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <label class="setting-label">Price alert threshold (%)</label>
+          <input type="number" class="setting-input" value="5" min="1" max="50">
+        </div>
+      </div>
+      <div class="setting-card">
+        <h3>Notifications</h3>
+        <div class="setting-row">
+          <label class="check-row"><input type="checkbox" checked><span>Email alerts</span></label>
+          <label class="check-row"><input type="checkbox"><span>Slack notifications</span></label>
+          <label class="check-row"><input type="checkbox"><span>Webhook</span></label>
+        </div>
+      </div>
+      <div class="setting-card" style="grid-column: 1 / -1;">
+        <h3>Watched categories</h3>
+        <div id="categoryToggles"></div>
+      </div>
+    </div>
+    <button class="save-btn" onclick="showToast()">Save changes</button>
+  </div>
+
+  <div class="foot">
+    <a href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export dataset (.csv)
+    </a>
+    <span class="note">15 products across 9 sources, refreshed daily</span>
+  </div>
+
+</div>
+
+<div class="toast" id="toast">Settings saved</div>
+
+<script>
+// Seeded PRNG (mulberry32)
+function mulberry32(a) {
+  return function() {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function seededGauss(rng) {
+  let u1 = rng(), u2 = rng();
+  while (u1 === 0) u1 = rng();
+  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+}
+
+const PRODUCTS = [
+  {name:"MacBook Air M3 15\"",category:"Laptops",stores:["Amazon","Best Buy","B&H Photo","Adorama"]},
+  {name:"Dell XPS 14",category:"Laptops",stores:["Amazon","Best Buy","Dell","Newegg"]},
+  {name:"ThinkPad X1 Carbon",category:"Laptops",stores:["Amazon","Lenovo","Best Buy","B&H Photo"]},
+  {name:"Sony WH-1000XM5",category:"Audio",stores:["Amazon","Best Buy","Walmart","Target"]},
+  {name:"AirPods Pro 2",category:"Audio",stores:["Amazon","Best Buy","Walmart","Target"]},
+  {name:"iPad Air M2",category:"Tablets",stores:["Amazon","Best Buy","B&H Photo","Walmart"]},
+  {name:"Samsung Galaxy Tab S9",category:"Tablets",stores:["Amazon","Best Buy","Samsung","Walmart"]},
+  {name:"Samsung 65\" S90D OLED",category:"TVs",stores:["Amazon","Best Buy","Walmart","Samsung"]},
+  {name:"LG C4 65\" OLED",category:"TVs",stores:["Amazon","Best Buy","B&H Photo","Walmart"]},
+  {name:"Sony A95L 55\" QD-OLED",category:"TVs",stores:["Amazon","Best Buy","B&H Photo","Adorama"]},
+  {name:"Dyson V15 Detect",category:"Home",stores:["Amazon","Dyson","Best Buy","Target"]},
+  {name:"Roomba j9+",category:"Home",stores:["Amazon","Best Buy","iRobot","Target"]},
+  {name:"PS5 Slim",category:"Gaming",stores:["Amazon","Best Buy","Walmart","Target"]},
+  {name:"Xbox Series X",category:"Gaming",stores:["Amazon","Best Buy","Walmart","Microsoft"]},
+  {name:"Nintendo Switch OLED",category:"Gaming",stores:["Amazon","Best Buy","Walmart","Target"]},
+];
+
+const BASE_PRICES = {
+  "MacBook Air M3 15\"":{Amazon:1299,"Best Buy":1299,"B&H Photo":1249,Adorama:1259},
+  "Dell XPS 14":{Amazon:1399,"Best Buy":1399,Dell:1349,Newegg:1379},
+  "ThinkPad X1 Carbon":{Amazon:1449,"Best Buy":1449,Lenovo:1399,"B&H Photo":1419},
+  "Sony WH-1000XM5":{Amazon:348,"Best Buy":349,Walmart:328,Target:348},
+  "AirPods Pro 2":{Amazon:249,"Best Buy":249,Walmart:234,Target:249},
+  "iPad Air M2":{Amazon:599,"Best Buy":599,"B&H Photo":579,Walmart:599},
+  "Samsung Galaxy Tab S9":{Amazon:649,"Best Buy":649,Samsung:649,Walmart:629},
+  "Samsung 65\" S90D OLED":{Amazon:1597,"Best Buy":1599,Walmart:1548,Samsung:1599},
+  "LG C4 65\" OLED":{Amazon:1496,"Best Buy":1499,"B&H Photo":1446,Walmart:1496},
+  "Sony A95L 55\" QD-OLED":{Amazon:2498,"Best Buy":2499,"B&H Photo":2398,Adorama:2449},
+  "Dyson V15 Detect":{Amazon:749,Dyson:749,"Best Buy":699,Target:749},
+  "Roomba j9+":{Amazon:799,"Best Buy":799,iRobot:799,Target:779},
+  "PS5 Slim":{Amazon:449,"Best Buy":449,Walmart:449,Target:449},
+  "Xbox Series X":{Amazon:499,"Best Buy":499,Walmart:479,Microsoft:499},
+  "Nintendo Switch OLED":{Amazon:349,"Best Buy":349,Walmart:339,Target:349},
+};
+
+const rng = mulberry32(42);
+
+function generatePriceData() {
+  const data = [];
+  const endDate = new Date(2026, 8, 28);
+  for (const product of PRODUCTS) {
+    for (const store of product.stores) {
+      const base = BASE_PRICES[product.name][store];
+      for (let d = 0; d < 30; d++) {
+        const date = new Date(endDate);
+        date.setDate(date.getDate() - (29 - d));
+        const noise = seededGauss(rng) * base * 0.015;
+        const trend = -base * 0.0008 * d / 30;
+        const sale = (d === 10 || d === 11 || d === 12 || d === 25 || d === 26) ? -base * 0.07 : 0;
+        const price = Math.max(Math.round((base + noise + trend + sale) * 100) / 100, base * 0.85);
+        data.push({
+          date: date.toISOString().slice(0, 10),
+          product: product.name,
+          store: store,
+          category: product.category,
+          price: price,
+        });
+      }
+    }
+  }
+  return data;
+}
+
+function computeSummary(data) {
+  const products = {};
+  for (const row of data) {
+    if (!products[row.product]) products[row.product] = { prices: [], stores: {}, category: row.category };
+    products[row.product].prices.push(row.price);
+    if (!products[row.product].stores[row.store]) products[row.product].stores[row.store] = [];
+    products[row.product].stores[row.store].push(row.price);
+  }
+  const summary = [];
+  for (const [name, info] of Object.entries(products)) {
+    let bestStore = null, bestPrice = Infinity;
+    for (const [s, prices] of Object.entries(info.stores)) {
+      const last = prices[prices.length - 1];
+      if (last < bestPrice) { bestPrice = last; bestStore = s; }
+    }
+    const avg = info.prices.reduce((a, b) => a + b, 0) / info.prices.length;
+    const high = Math.max(...info.prices);
+    const low = Math.min(...info.prices);
+    summary.push({ product: name, category: info.category, currentBest: bestPrice, bestStore, avg: Math.round(avg * 100) / 100, high, low, savings: Math.round((high - bestPrice) * 100) / 100 });
+  }
+  summary.sort((a, b) => b.savings - a.savings);
+  return summary;
+}
+
+function bestPriceByDay(data) {
+  const series = {};
+  for (const row of data) {
+    if (!series[row.product]) series[row.product] = {};
+    if (!series[row.product][row.date]) series[row.product][row.date] = [];
+    series[row.product][row.date].push(row.price);
+  }
+  const result = {};
+  for (const [name, dates] of Object.entries(series)) {
+    const sortedDates = Object.keys(dates).sort();
+    result[name] = { dates: sortedDates, prices: sortedDates.map(d => Math.min(...dates[d])) };
+  }
+  return result;
+}
+
+const PRICE_DATA = generatePriceData();
+const SUMMARY = computeSummary(PRICE_DATA);
+const CHART_DATA = bestPriceByDay(PRICE_DATA);
+
+// Best saving KPI
+document.getElementById('bestSaving').textContent = '-$' + Math.round(SUMMARY[0].savings);
+
+// Summary table
+const tbody = document.getElementById('summaryTable');
+for (const item of SUMMARY) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td class="pname">${item.product}</td>
+    <td><span class="cat-pill cat-${item.category}">${item.category}</span></td>
+    <td class="mono price">$${item.currentBest.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+    <td class="store">${item.bestStore}</td>
+    <td class="mono avg">$${Math.round(item.avg).toLocaleString()}</td>
+    <td class="mono range">$${Math.round(item.low).toLocaleString()}–$${Math.round(item.high).toLocaleString()}</td>
+    <td class="save">-$${Math.round(item.savings)}</td>`;
+  tbody.appendChild(tr);
+}
+
+// Chart
+const palette = ['#818cf8','#f87171','#34d399','#fbbf24','#22d3ee','#f472b6','#60a5fa','#a3e635','#fb923c','#a78bfa','#2dd4bf','#e879f9','#38bdf8','#facc15','#c084fc'];
+const labels = CHART_DATA[PRODUCTS[0].name].dates;
+const datasets = PRODUCTS.map((p, i) => ({
+  label: p.name,
+  data: CHART_DATA[p.name].prices,
+  borderColor: palette[i % palette.length],
+  backgroundColor: 'transparent',
+  borderWidth: 1.4,
+  pointRadius: 0,
+  pointHoverRadius: 3,
+  pointHoverBackgroundColor: palette[i % palette.length],
+  tension: 0.35,
+}));
+new Chart(document.getElementById('priceChart'), {
+  type: 'line',
+  data: { labels, datasets },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: { boxWidth: 7, boxHeight: 7, padding: 12, font: { family: "'Inter',sans-serif", size: 10, weight: '500' }, color: '#64748b', usePointStyle: true, pointStyle: 'circle' },
+      },
+      tooltip: {
+        backgroundColor: '#1c2841', borderColor: '#253352', borderWidth: 1,
+        titleFont: { family: "'Inter',sans-serif", size: 11, weight: '600' },
+        bodyFont: { family: "'JetBrains Mono',monospace", size: 11 },
+        titleColor: '#f1f5f9', bodyColor: '#94a3b8', padding: 10, cornerRadius: 6,
+        displayColors: true, boxWidth: 7, boxHeight: 7, boxPadding: 4,
+        callbacks: { label: ctx => ' ' + ctx.dataset.label + ': $' + ctx.parsed.y.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) },
+      },
+    },
+    scales: {
+      x: { grid: { display: false }, border: { color: '#253352' }, ticks: { maxTicksLimit: 8, font: { family: "'JetBrains Mono',monospace", size: 9 }, color: '#475569' } },
+      y: { border: { display: false }, ticks: { callback: v => '$' + v.toLocaleString(), font: { family: "'JetBrains Mono',monospace", size: 9 }, color: '#475569' }, grid: { color: 'rgba(37,51,82,.5)', lineWidth: .5 } },
+    },
+  },
+});
+
+// Products tab
+const categories = ['All', ...new Set(PRODUCTS.map(p => p.category))];
+const catFilters = document.getElementById('catFilters');
+categories.forEach(c => {
+  const btn = document.createElement('button');
+  btn.className = 'cat-btn' + (c === 'All' ? ' active' : '');
+  btn.textContent = c;
+  btn.addEventListener('click', () => {
+    catFilters.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderProducts();
+  });
+  catFilters.appendChild(btn);
+});
+
+document.getElementById('productSearch').addEventListener('input', renderProducts);
+
+function renderProducts() {
+  const q = document.getElementById('productSearch').value.toLowerCase();
+  const activeCat = catFilters.querySelector('.cat-btn.active').textContent;
+  const grid = document.getElementById('productGrid');
+  grid.innerHTML = '';
+
+  const filtered = SUMMARY.filter(item => {
+    if (activeCat !== 'All' && item.category !== activeCat) return false;
+    if (q && !item.product.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  for (const item of filtered) {
+    const bestByDay = CHART_DATA[item.product];
+    const prices = bestByDay.prices;
+    const minP = Math.min(...prices), maxP = Math.max(...prices);
+    const range = maxP - minP || 1;
+    const sparkBars = prices.map(p => {
+      const h = Math.max(3, Math.round(((p - minP) / range) * 26));
+      return `<span style="height:${h}px"></span>`;
+    }).join('');
+
+    const card = document.createElement('div');
+    card.className = 'product-card';
+    card.innerHTML = `
+      <div class="pc-top">
+        <div class="pc-name">${item.product}</div>
+        <span class="cat-pill cat-${item.category}">${item.category}</span>
+      </div>
+      <div class="pc-mid">
+        <div>
+          <div class="pc-price">$${item.currentBest.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+          <div class="pc-store">${item.bestStore}</div>
+        </div>
+        <div class="pc-spark">${sparkBars}</div>
+      </div>
+      <div class="pc-bottom">
+        <div class="pc-saving">-$${Math.round(item.savings)} saved</div>
+        <div class="pc-range">$${Math.round(item.low)}–$${Math.round(item.high)}</div>
+      </div>`;
+    grid.appendChild(card);
+  }
+}
+renderProducts();
+
+// Settings: category toggles
+const togglesWrap = document.getElementById('categoryToggles');
+const cats = [...new Set(PRODUCTS.map(p => p.category))];
+for (const c of cats) {
+  const row = document.createElement('div');
+  row.className = 'toggle-row';
+  row.innerHTML = `<span>${c}</span><button class="toggle on" onclick="this.classList.toggle('on')"></button>`;
+  togglesWrap.appendChild(row);
+}
+
+// Tabs
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.tab).classList.add('active');
+  });
+});
+
+// Toast
+function showToast() {
+  const t = document.getElementById('toast');
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+</script>
+</body>
+</html>
